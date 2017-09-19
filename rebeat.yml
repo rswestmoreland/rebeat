@@ -5,9 +5,8 @@
 rebeat:
   address: "127.0.0.1"
   port: 5044
-  protocol: tcp
+  protocol: lumberjack
   max_msg_size: 8192
-  default_es_log_type: rebeat
 
 
 #================================ General =====================================

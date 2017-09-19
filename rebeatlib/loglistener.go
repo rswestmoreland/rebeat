@@ -44,9 +44,10 @@ func (ll *LogListener) Start(logEntriesRecieved chan common.MapStr, logEntriesEr
 
 	address := fmt.Sprintf("%s:%d", ll.config.Address, ll.config.Port)
 
-	if ll.config.Protocol == "tcp" {
-		ll.startTCP(ll.config.Protocol, address)
+	if ll.config.Protocol == "lumberjack" {
+		ll.startLJ("tcp", address)
 	} else {
+		ll.startTCP("tcp", address)
 	}
 
 }
@@ -56,7 +57,7 @@ func (ll *LogListener) startTCP(proto string, address string) {
 	l, err := net.Listen(proto, address)
 
 	if err != nil {
-		logp.Err("Error listening on % socket via %s: %v", ll.config.Protocol, address, err.Error())
+		logp.Err("Error listening on % socket via %s: %v", proto, address, err.Error())
 		ll.logEntriesError <- true
 		return
 	}
@@ -88,6 +89,44 @@ func (ll *LogListener) startTCP(proto string, address string) {
 }
 
 
+func (ll *LogListener) startLJ(proto string, address string) {
+
+        l, err := net.Listen(proto, address)
+
+        if err != nil {
+                logp.Err("Error listening on % socket via %s: %v", proto, address, err.Error())
+                ll.logEntriesError <- true
+                return
+        }
+        defer l.Close()
+
+        logp.Info("Now listening for logs via %s on %s", ll.config.Protocol, address)
+
+        for {
+                conn, err := l.Accept()
+                if err != nil {
+                        logp.Err("Error accepting log event: %v", err.Error())
+                        continue
+                }
+
+                buffer := make([]byte, ll.config.MaxMsgSize)
+
+                length, err := conn.Read(buffer)
+                if err != nil {
+                        e, ok := err.(net.Error)
+                        if ok && e.Timeout() {
+                                logp.Err("Timeout reading from socket: %v", err)
+                                ll.logEntriesError <- true
+                                return
+                        }
+                }
+                go ll.processMessage(strings.TrimSpace(string(buffer[:length])))
+
+        }
+}
+
+
+
 func (ll *LogListener) Shutdown() {
 	close(ll.logEntriesError)
 	close(ll.logEntriesRecieved)
@@ -101,14 +140,7 @@ func (ll *LogListener) processMessage(logData string) {
 	}
 	event := common.MapStr{}
 
-	if ll.config.EnableSyslogFormatOnly {
-		msg, facility, severity, err := GetSyslogMsgDetails(logData)
-		if err == nil {
-			event["facility"] = facility
-			event["severity"] = severity
-			event["message"] = msg
-		}
-	} else if ll.config.JsonMode {
+	if ll.config.JsonMode {
 		if ll.config.MergeFieldsToRoot {
 			if err := ffjson.Unmarshal([]byte(logData), &event); err != nil {
 				logp.Err("Could not parse JSON: %v", err)

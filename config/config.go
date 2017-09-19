@@ -14,7 +14,6 @@ type Config struct {
 	JsonMode               bool              `config:"json_mode"`
 	DefaultEsLogType       string            `config:"default_es_log_type"`
 	MergeFieldsToRoot      bool              `config:"merge_fields_to_root"`
-	EnableSyslogFormatOnly bool              `config:"enable_syslog_format_only"`
 	EnableJsonValidation   bool              `config:"enable_json_validation"`
 	ValidateAllJSONTypes   bool              `config:"validate_all_json_types"`
 	JsonSchema             map[string]string `config:"json_schema"`
@@ -25,12 +24,11 @@ var DefaultConfig = Config{
 	Period:                 5 * time.Second,
 	Address:                "127.0.0.1",
 	Port:                   5044,
-	Protocol:               "tcp",
+	Protocol:               "lumberjack",
 	MaxMsgSize:             8192,
-	JsonMode:               true,
+	JsonMode:               false,
 	DefaultEsLogType:       "rebeat",
 	MergeFieldsToRoot:      false,
-	EnableSyslogFormatOnly: false,
 	EnableJsonValidation:   false,
 	ValidateAllJSONTypes:   false,
 	Debug:                  false,

@@ -24,12 +24,6 @@ rebeat:
   # Wether to place the parsed json data at the root level or nested in a 'log' object
   #merge_fields_to_root: true
   
-  # Set process to only act as a syslog message reciever
-  #enable_syslog_format_only: false
-  
-  # Set process to receive only GELF formated messages
-  #enable_gelf: false
-
   # Enable json validation with schemas
   #enable_json_validation: false
   
