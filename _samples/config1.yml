@@ -1,0 +1,3 @@
+rebeat:
+  port: 5044
+  max_message_size: 8192
