@@ -10,7 +10,6 @@ import (
 	"github.com/elastic/beats/libbeat/logp"
 
 	"github.com/rswestmoreland/rebeat/config"
-	"github.com/pquerna/ffjson/ffjson"
 	"github.com/xeipuuv/gojsonschema"
 )
 
@@ -140,69 +139,8 @@ func (ll *LogListener) processMessage(logData string) {
 	}
 	event := common.MapStr{}
 
-	if ll.config.JsonMode {
-		if ll.config.MergeFieldsToRoot {
-			if err := ffjson.Unmarshal([]byte(logData), &event); err != nil {
-				logp.Err("Could not parse JSON: %v", err)
-				event["message"] = logData
-				event["tags"] = []string{"_rebeat_json_parse_failure"}
-				goto PreSend
-			}
-		} else {
-			event = common.MapStr{}
-			nestedData := common.MapStr{}
-			if err := ffjson.Unmarshal([]byte(logData), &nestedData); err != nil {
-				logp.Err("Could not parse JSON: %v", err)
-				event["message"] = logData
-				event["tags"] = []string{"_rebeat_json_parse_failure"}
-				goto PreSend
-			} else {
-				event["log"] = nestedData
-			}
-		}
+	event["message"] = logData
 
-		schemaSet := false
-		hasType := false
-		if _, ok := event["type"]; ok {
-			hasType = true
-		}
-
-		if hasType {
-			_, schemaSet = ll.jsonSchema[event["type"].(string)]
-		}
-
-		if ll.config.ValidateAllJSONTypes && !schemaSet {
-			if ll.config.Debug && hasType {
-				logp.Err("Log entry of type '%s' has no JSON schema set.", event["type"].(string))
-			} else if ll.config.Debug {
-				logp.Err("Log entry has no type.")
-			}
-			return
-		}
-
-		if ll.config.EnableJsonValidation && schemaSet {
-
-			result, err := gojsonschema.Validate(ll.jsonSchema[event["type"].(string)], gojsonschema.NewStringLoader(logData))
-			if err != nil {
-				if ll.config.Debug {
-					logp.Err("Error with JSON object: %s", err.Error())
-				}
-				return
-			}
-
-			if !result.Valid() {
-				if ll.config.Debug {
-					logp.Err("Log entry does not match specified schema for type '%s'. (Note: ensure you have 'type' field (string) at the root level in your schema)", event["type"].(string))
-				}
-				return
-			}
-		}
-
-	} else {
-		event["message"] = logData
-	}
-
-PreSend:
 	event["@timestamp"] = common.Time(time.Now())
 
 	ll.logEntriesRecieved <- event
