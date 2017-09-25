@@ -10,12 +10,10 @@ import (
 	"github.com/elastic/beats/libbeat/logp"
 
 	"github.com/rswestmoreland/rebeat/config"
-	"github.com/xeipuuv/gojsonschema"
 )
 
 type LogListener struct {
 	config             config.Config
-	jsonSchema         map[string]gojsonschema.JSONLoader
 	logEntriesRecieved chan common.MapStr
 	logEntriesError    chan bool
 }
@@ -23,15 +21,6 @@ type LogListener struct {
 func NewLogListener(cfg config.Config) *LogListener {
 	ll := &LogListener{
 		config: cfg,
-	}
-	if ll.config.EnableJsonValidation {
-		ll.jsonSchema = map[string]gojsonschema.JSONLoader{}
-		for name, path := range ll.config.JsonSchema {
-			logp.Info("Loading JSON schema %s from %s", name, path)
-			schemaLoader := gojsonschema.NewReferenceLoader("file://" + path)
-			ds := schemaLoader
-			ll.jsonSchema[name] = ds
-		}
 	}
 	return ll
 }
@@ -50,6 +39,7 @@ func (ll *LogListener) Start(logEntriesRecieved chan common.MapStr, logEntriesEr
 	}
 
 }
+
 
 func (ll *LogListener) startTCP(proto string, address string) {
 
@@ -72,7 +62,7 @@ func (ll *LogListener) startTCP(proto string, address string) {
 		}
 
 		buffer := make([]byte, ll.config.MaxMsgSize)
-
+		
 		length, err := conn.Read(buffer)
 		if err != nil {
 			e, ok := err.(net.Error)
@@ -108,20 +98,30 @@ func (ll *LogListener) startLJ(proto string, address string) {
                         continue
                 }
 
-                buffer := make([]byte, ll.config.MaxMsgSize)
+                //buffer := make([]byte, ll.config.MaxMsgSize)
+		//
+                //length, err := conn.Read(buffer)
+                //if err != nil {
+                //        e, ok := err.(net.Error)
+                //        if ok && e.Timeout() {
+                //                logp.Err("Timeout reading from socket: %v", err)
+                //                ll.logEntriesError <- true
+                //                return
+                //        }
+                //}
 
-                length, err := conn.Read(buffer)
-                if err != nil {
-                        e, ok := err.(net.Error)
-                        if ok && e.Timeout() {
-                                logp.Err("Timeout reading from socket: %v", err)
-                                ll.logEntriesError <- true
-                                return
-                        }
-                }
-                go ll.processMessage(strings.TrimSpace(string(buffer[:length])))
+                //go ll.processMessage(strings.TrimSpace(string(buffer[:length])))
+		go lumberConn(conn)
 
         }
+}
+
+// lumberConn handles an incoming connection from a lumberjack client
+func lumberConn(c net.Conn) {
+	defer c.Close()
+	logp.Info("[%s] accepting lumberjack connection", c.RemoteAddr().String())
+	NewParser(c).Parse()
+	logp.Info("[%s] closing lumberjack connection", c.RemoteAddr().String())
 }
 
 
@@ -139,6 +139,8 @@ func (ll *LogListener) processMessage(logData string) {
 	}
 	event := common.MapStr{}
 
+	//event["message"] = input.NewParser(logData).Parse()
+	//event["message"] = input.Parser(logData).Parse() <- try this next
 	event["message"] = logData
 
 	event["@timestamp"] = common.Time(time.Now())

@@ -1,4 +1,4 @@
-package filebeat
+package rebeatlib
 
 import (
 	"bytes"
@@ -12,9 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/rswestmoreland/rebeat/buffer"
-	"github.com/rswestmoreland/rebeat/input"
 )
 
 const (
@@ -24,20 +21,27 @@ const (
 )
 
 type Parser struct {
-	Conn       net.Conn
-	Recv       input.Receiver
-	wlen, plen uint32
-	buffer     io.Reader
-	SampleSize int
+        Conn       net.Conn
+        wlen, plen uint32
+        buffer     io.Reader
 }
 
-func NewParser(c net.Conn, r input.Receiver, sampleSize int) *Parser {
+// Taken from https://github.com/elasticsearch/logstash-forwarder/blob/master/event.go
+type Event struct {
+	Source string  `json:"source,omitempty"`
+	Offset int64   `json:"offset,omitempty"`
+	Line   uint64  `json:"line,omitempty"`
+	Text   *string `json:"text,omitempty"`
+	Fields *map[string]interface{}
+}
+
+
+func NewParser(c net.Conn) *Parser {
 	return &Parser{
 		Conn: c,
-		Recv: r,
-		SampleSize: sampleSize,
 	}
 }
+
 
 // ack acknowledges that the payload was received successfully
 func (p *Parser) ack(seq uint32) error {
@@ -119,7 +123,7 @@ func (p *Parser) read() (uint32, error) {
 			binary.Read(buff, binary.BigEndian, &seq)
 			binary.Read(buff, binary.BigEndian, &count)
 
-			var ev buffer.Event
+			var ev Event
 			fields := make(map[string]interface{})
 			fields["timestamp"] = time.Now().Format(time.RFC3339Nano)
 
@@ -137,10 +141,7 @@ func (p *Parser) read() (uint32, error) {
 			ev.Text = &t
 			ev.Fields = &fields
 
-			// Send to the receiver which is a buffer. We block because...
-			if server.RandInt(0, 100) < p.SampleSize {
-				p.Recv.Send(&ev)
-			}
+			//////p.Recv.Send(&ev)
 
 		case "2J": // JSON
 			//log.Printf("Got JSON data")
@@ -154,7 +155,7 @@ func (p *Parser) read() (uint32, error) {
 				return seq, err
 			}
 
-			var ev buffer.Event
+			var ev Event
 			var fields map[string]interface{}
 			decoder := json.NewDecoder(strings.NewReader(string(jsonData)))
 			decoder.UseNumber()
@@ -171,10 +172,7 @@ func (p *Parser) read() (uint32, error) {
 			ev.Text = &t
 			ev.Fields = &fields
 
-			// Send to the receiver which is a buffer. We block because...
-			if server.RandInt(0, 100) < p.SampleSize {
-				p.Recv.Send(&ev)
-			}
+			//////p.Recv.Send(&ev)
 
 		default:
 			return seq, fmt.Errorf("unknown type: %s", b)
@@ -221,3 +219,4 @@ Read:
 		}
 	}
 }
+
