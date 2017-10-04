@@ -40,12 +40,12 @@ func (bt *Rebeat) Run(b *beat.Beat) error {
 
 	bt.client = b.Publisher.Connect()
 
-	logEntriesRecieved := make(chan common.MapStr, 100000)
+	logEntriesReceived := make(chan common.MapStr, 100000)
 	logEntriesErrors := make(chan bool, 1)
 
 	go func(logs chan common.MapStr, errs chan bool) {
 		bt.logListener.Start(logs, errs)
-	}(logEntriesRecieved, logEntriesErrors)
+	}(logEntriesReceived, logEntriesErrors)
 
 	var event common.MapStr
 
@@ -55,7 +55,7 @@ func (bt *Rebeat) Run(b *beat.Beat) error {
 			return nil
 		case <-logEntriesErrors:
 			return nil
-		case event = <-logEntriesRecieved:
+		case event = <-logEntriesReceived:
 			if event == nil {
 				return nil
 			}
@@ -63,7 +63,7 @@ func (bt *Rebeat) Run(b *beat.Beat) error {
 				event["type"] = bt.config.DefaultEsLogType
 			}
 			bt.client.PublishEvent(event)
-			logp.Info("Event sent")
+			//logp.Info("Event sent")
 		}
 	}
 

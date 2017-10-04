@@ -3,8 +3,9 @@ package rebeatlib
 import (
 	"fmt"
 	"net"
-	"strings"
-	"time"
+	//"crypto/tls"
+	//"strings"
+	//"time"
 
 	"github.com/elastic/beats/libbeat/common"
 	"github.com/elastic/beats/libbeat/logp"
@@ -14,7 +15,7 @@ import (
 
 type LogListener struct {
 	config             config.Config
-	logEntriesRecieved chan common.MapStr
+	logEntriesReceived chan common.MapStr
 	logEntriesError    chan bool
 }
 
@@ -25,126 +26,59 @@ func NewLogListener(cfg config.Config) *LogListener {
 	return ll
 }
 
-func (ll *LogListener) Start(logEntriesRecieved chan common.MapStr, logEntriesError chan bool) {
 
-	ll.logEntriesRecieved = logEntriesRecieved
-	ll.logEntriesError = logEntriesError
+func (ll *LogListener) Start(logEntriesReceived chan common.MapStr, logEntriesError chan bool) {
+
+        ll.logEntriesReceived = logEntriesReceived
+        ll.logEntriesError = logEntriesError
+
+	//cert, err := tls.LoadX509KeyPair(ll.config.SSLCrt, ll.config.SSLKey)
+	//if err != nil {
+	//	logp.Err("Error loading keys: %v", err)
+	//	ll.logEntriesError <- true
+	//	return
+	//}
 
 	address := fmt.Sprintf("%s:%d", ll.config.Address, ll.config.Port)
-
-	if ll.config.Protocol == "lumberjack" {
-		ll.startLJ("tcp", address)
-	} else {
-		ll.startTCP("tcp", address)
-	}
-
-}
-
-
-func (ll *LogListener) startTCP(proto string, address string) {
-
-	l, err := net.Listen(proto, address)
-
-	if err != nil {
-		logp.Err("Error listening on % socket via %s: %v", proto, address, err.Error())
-		ll.logEntriesError <- true
-		return
-	}
-	defer l.Close()
-
-	logp.Info("Now listening for logs via %s on %s", ll.config.Protocol, address)
-
-	for {
-		conn, err := l.Accept()
-		if err != nil {
-			logp.Err("Error accepting log event: %v", err.Error())
-			continue
-		}
-
-		buffer := make([]byte, ll.config.MaxMsgSize)
-		
-		length, err := conn.Read(buffer)
-		if err != nil {
-			e, ok := err.(net.Error)
-			if ok && e.Timeout() {
-				logp.Err("Timeout reading from socket: %v", err)
-				ll.logEntriesError <- true
-				return
-			}
-		}
-		go ll.processMessage(strings.TrimSpace(string(buffer[:length])))
-
-	}
-}
-
-
-func (ll *LogListener) startLJ(proto string, address string) {
-
-        l, err := net.Listen(proto, address)
+        l, err := net.Listen("tcp", address)
 
         if err != nil {
-                logp.Err("Error listening on % socket via %s: %v", proto, address, err.Error())
+                logp.Err("Error listening on tcp socket via %s: %v", address, err.Error())
                 ll.logEntriesError <- true
                 return
         }
         defer l.Close()
+
+        //tlsconfig := tls.Config{Certificates: []tls.Certificate{cert}}
+	//ln := tls.NewListener(l, &tlsconfig)
 
         logp.Info("Now listening for logs via %s on %s", ll.config.Protocol, address)
 
         for {
                 conn, err := l.Accept()
                 if err != nil {
-                        logp.Err("Error accepting log event: %v", err.Error())
+                        logp.Err("Error accepting connection: %v", err.Error())
                         continue
                 }
 
-                //buffer := make([]byte, ll.config.MaxMsgSize)
-		//
-                //length, err := conn.Read(buffer)
-                //if err != nil {
-                //        e, ok := err.(net.Error)
-                //        if ok && e.Timeout() {
-                //                logp.Err("Timeout reading from socket: %v", err)
-                //                ll.logEntriesError <- true
-                //                return
-                //        }
-                //}
-
-                //go ll.processMessage(strings.TrimSpace(string(buffer[:length])))
-		go lumberConn(conn)
-
-        }
+		go lumberConn(conn, ll.logEntriesReceived)
+	}
 }
+
 
 // lumberConn handles an incoming connection from a lumberjack client
-func lumberConn(c net.Conn) {
-	defer c.Close()
-	logp.Info("[%s] accepting lumberjack connection", c.RemoteAddr().String())
-	NewParser(c).Parse()
-	logp.Info("[%s] closing lumberjack connection", c.RemoteAddr().String())
+func lumberConn(conn net.Conn, logs chan common.MapStr) {
+	//defer conn.Close()
+	logp.Info("[%s] accepting lumberjack connection", conn.RemoteAddr().String())
+	NewConnection(conn, logs).Parse()
+	logp.Info("[%s] closing lumberjack connection", conn.RemoteAddr().String())
+	conn.Close()
 }
-
 
 
 func (ll *LogListener) Shutdown() {
 	close(ll.logEntriesError)
-	close(ll.logEntriesRecieved)
+	close(ll.logEntriesReceived)
 }
 
-func (ll *LogListener) processMessage(logData string) {
-
-	if logData == "" {
-		logp.Err("Event is empty")
-		return
-	}
-	event := common.MapStr{}
-
-	//event["message"] = input.NewParser(logData).Parse()
-	//event["message"] = input.Parser(logData).Parse() <- try this next
-	event["message"] = logData
-
-	event["@timestamp"] = common.Time(time.Now())
-
-	ll.logEntriesRecieved <- event
-}
 

@@ -10,6 +10,8 @@ type Config struct {
 	Address                string            `config:"address"`
 	Port                   int               `config:"port"`
 	Protocol               string            `config:"protocol"`
+	SSLCrt                 string            `config:"ssl_crt"`
+	SSLKey                 string            `config:"ssl_key"`
 	MaxMsgSize             int               `config:"max_msg_size"`
 	JsonMode               bool              `config:"json_mode"`
 	DefaultEsLogType       string            `config:"default_es_log_type"`
@@ -25,6 +27,8 @@ var DefaultConfig = Config{
 	Address:                "127.0.0.1",
 	Port:                   5044,
 	Protocol:               "lumberjack",
+	SSLCrt:			"",
+	SSLKey:			"",
 	MaxMsgSize:             8192,
 	JsonMode:               false,
 	DefaultEsLogType:       "rebeat",
