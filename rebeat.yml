@@ -6,7 +6,6 @@ rebeat:
   address: "127.0.0.1"
   port: 5044
   protocol: lumberjack
-  max_msg_size: 8192
 
 
 #================================ General =====================================
@@ -65,17 +64,17 @@ output.file:
 
   # Name of the generated files. The default is `rebeat` and it generates
   # files: `rebeat`, `rebeat.1`, `rebeat.2`, etc.
-  #filename: rebeat
+  filename: rebeat
 
   # Maximum size in kilobytes of each file. When this size is reached, and on
   # every rebeat restart, the files are rotated. The default value is 10240
   # kB.
-  #rotate_every_kb: 10000
+  rotate_every_kb: 100000
 
   # Maximum number of files under path. When this number of files is reached,
   # the oldest file is deleted and the rest are shifted from last to first. The
   # default is 7 files.
-  #number_of_files: 7
+  number_of_files: 50
 
 #================================ Logging =====================================
 

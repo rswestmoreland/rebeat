@@ -10,11 +10,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	//"bufio"
-	//"log"
 	"net"
 	"strconv"
-	//"strings"
 	"time"
 )
 
@@ -54,13 +51,14 @@ func NewConnection(c net.Conn, logs chan common.MapStr) *Parser {
 }
 
 
-// ack acknowledges that the payload was received successfully
+// SendAck acknowledges that the payload was received successfully
 func (p *Parser) SendAck(seq uint32) error {
-	ackpacket := bytes.NewBuffer([]byte(ackframe))
-	binary.Write(ackpacket, binary.BigEndian, seq)
-	//logp.Info("Sending ACK for seq %d", ackpacket)
+	ackpacket := make([]byte, 6)
+	copy(ackpacket[:], ackframe)
+	binary.BigEndian.PutUint32(ackpacket[2:], seq)
+	//logp.Info("Sending ACK for seq %d", seq)
 
-	_, err := p.Conn.Write(ackpacket.Bytes())
+	_, err := p.Conn.Write(ackpacket)
 	if err != nil {
 		return err
 	}
@@ -68,8 +66,8 @@ func (p *Parser) SendAck(seq uint32) error {
 	return nil
 }
 
-// readKV parses key value pairs from within the payload
-func (p *Parser) readKV() ([]byte, []byte, error) {
+// ReadKV parses key value pairs from within the payload
+func (p *Parser) ReadKV() ([]byte, []byte, error) {
 	var klen, vlen uint32
 
 	// Read key len
@@ -112,18 +110,14 @@ func (p *Parser) ReadPayload(wlen, plen uint32) (uint32, error) {
 
 	p.zlibBuffer.Reset()
 	io.CopyN(&p.zlibBuffer, p.Conn, int64(plen))
-
-	//zlibReader, err := zlib.NewReader(p.Conn)
 	zlibReader, err := zlib.NewReader(&p.zlibBuffer)
 	
 	if err != nil {
 		logp.Err("Error initializing zlib reader")
 		return seq, err
 	}
-	//defer r.Close()
 
 	// Decompress
-	//buff := new(bytes.Buffer)
 	p.jsonBuffer.Reset()
 	io.Copy(&p.jsonBuffer, zlibReader)
 	p.readBuffer = &p.jsonBuffer
@@ -133,7 +127,7 @@ func (p *Parser) ReadPayload(wlen, plen uint32) (uint32, error) {
 	b := make([]byte, 2)
 	for i := uint32(0); i < wlen; i++ {
 		//logp.Info("Working on wlen %d of %d", i, wlen)
-		n, err := p.jsonBuffer.Read(b)
+		n, err := p.readBuffer.Read(b)
 		if err == io.EOF {
 			logp.Err("IO EOF error")
 			return seq, err
@@ -158,7 +152,8 @@ func (p *Parser) ReadPayload(wlen, plen uint32) (uint32, error) {
 
 			event := common.MapStr{}
 
-			if err := json.Unmarshal(jsonData, &event); err != nil {
+			err = json.Unmarshal(jsonData, &event)
+			if err != nil {
 				logp.Err("Error decoding JSON data on seq %d", seq)
 				return seq, err
 			}
@@ -168,32 +163,32 @@ func (p *Parser) ReadPayload(wlen, plen uint32) (uint32, error) {
 			p.logEntriesReceived <- event
 
 		} else if bytes.Equal(b, d) {
-                // Legacy data payload
-                        binary.Read(p.readBuffer, binary.BigEndian, &seq)
-                        binary.Read(p.readBuffer, binary.BigEndian, &count)
+		// Legacy data payload
+			binary.Read(p.readBuffer, binary.BigEndian, &seq)
+			binary.Read(p.readBuffer, binary.BigEndian, &count)
 
-                        var ev Event
-                        fields := make(map[string]interface{})
-                        fields["timestamp"] = time.Now().Format(time.RFC3339Nano)
+			event := common.MapStr{}
 
-                        for j := uint32(0); j < count; j++ {
-                                if k, v, err = p.readKV(); err != nil {
-                                        return seq, err
-                                }
-                                fields[string(k)] = string(v)
-                        }
+			for j := uint32(0); j < count; j++ {
+				k, v, err = p.ReadKV()
+				if err != nil {
+					return seq, err
+				}
+				event[string(k)] = string(v)
+			}
 
-                        ev.Source = fmt.Sprintf("lumberjack://%s%s", fields["host"], fields["file"])
-                        ev.Offset, _ = strconv.ParseInt(fields["offset"].(string), 10, 64)
-                        ev.Line = uint64(seq)
-                        t := fields["line"].(string)
-                        ev.Text = &t
-                        ev.Fields = &fields
+			event["source"] = fmt.Sprintf("lumberjack://%s%s", event["host"], event["file"])
+			event["offset"], _ = strconv.ParseInt(event["offset"].(string), 10, 64)
+			event["line"] = uint64(seq)
+			t := event["line"].(string)
+			event["text"] = &t
 
-                        //p.logEntriesReceived <- ev
+			event["rebeat_ts"] = common.Time(time.Now())
 
-                } else {
-			return seq, fmt.Errorf("Unknown type: %s", b)
+			p.logEntriesReceived <- event
+
+		} else {
+			return seq, fmt.Errorf("unknown type: %s", b)
 		}
 	}
 
@@ -205,11 +200,14 @@ func (p *Parser) Parse() {
 	f := make([]byte, 2)
 	w := []byte(windowsize)
 	c := []byte(compressed)
+	z := make([]byte, 2) // empty slice is 0x0000
 	var err error
 
-	//keepalive := 300 * time.Second
-	//p.Conn.(*net.TCPConn).SetKeepAlive(true)
-	//p.Conn.(*net.TCPConn).SetKeepAlivePeriod(keepalive)
+	keepalive := 60 * time.Second
+	p.Conn.(*net.TCPConn).SetKeepAlive(true)
+	p.Conn.(*net.TCPConn).SetKeepAlivePeriod(keepalive)
+
+	timeoutDuration := 300 * time.Second
 
 	remoteHost := p.Conn.RemoteAddr().String()
 
@@ -217,8 +215,10 @@ func (p *Parser) Parse() {
 
 Read:
 	for {
-		//p.Conn.SetReadDeadline(time.Now().Add(timeoutDuration))
+		p.Conn.SetReadDeadline(time.Now().Add(timeoutDuration))
 
+		// window length "2W"
+		err = binary.Read(p.Conn, binary.BigEndian, &f)
 		if err != nil {
 			e, ok := err.(net.Error)
 			if ok && e.Timeout() {
@@ -228,14 +228,15 @@ Read:
 				logp.Err("[%s] Error reading %v", remoteHost, err)
 			}
 		}
+		//logp.Info("[%s] Got data starting with 2W, wlen %d", remoteHost, wlen)
 
-		// window length "2W"
-		binary.Read(p.Conn, binary.BigEndian, &f)
 		if !bytes.Equal(f, w) {
-			// Connection got unexpected data
-			logp.Warn("[%s] Received unknown type 0x%x, expected 2W", remoteHost, f)
-			p.SendAck(0)
-			time.Sleep(time.Second)
+			// Got unexpected data
+			if bytes.Equal(f, z) {
+				logp.Info("[%s] Client likely closed connection", remoteHost)
+			} else {
+				logp.Warn("[%s] Received unknown type 0x%x, expected 2W", remoteHost, f)
+			}
 			break Read
 		}
 
@@ -249,8 +250,6 @@ Read:
 		if !bytes.Equal(f, c) {
 			// Got unexpected data
 			logp.Warn("[%s] Received unknown type 0x%x, expected 2C", remoteHost, f)
-			p.SendAck(0)
-			time.Sleep(time.Second)
 			break Read
 		}
 
