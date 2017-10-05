@@ -2,7 +2,7 @@
 
 ## Description
 
-This application is used as a Relay/Repeater (hence the name Rebeat) for  messages sent by other Elastic Beats via Lumberjack v2 (Beats Protocol) which is used for Logstash destinations.
+This application is used as a Relay/Repeater/Receiver (hence the name "Re"beat) for  messages sent by other Elastic Beats via Lumberjack v2 (Beats Protocol) which is used for Logstash destinations.
 
 Ensure that this folder is at the following location:
 `${GOPATH}/github.com/rswestmoreland`
@@ -13,12 +13,14 @@ Ensure that this folder is at the following location:
 
 - `rebeat.address` : The address on which the process will listen (Default: 127.0.0.1)
 - `rebeat.port` : The port on which the process will listen (Default = 5044)
-- `rebeat.default_es_log_type`: Elasticsearch type to assign to an event if one isn't specified (Default: rebeat)
-
+- `rebeat.timeout` : Number of seconds to wait for data before closing connection (Default = 0 for no timeout)
+- `tls.enable` : Enable optional TLS support (Default = false)
+- `tls.certification` : Specify path to server's tls cert (pem or crt format)
+- `tls.key` : Specify path to server's tls key
 
 #### Considerations
 
-TBD
+This project is *new* and will require more updates before it is officially production ready.  
 
 
 ### Requirements
@@ -68,51 +70,6 @@ To run Rebeat with debugging output enabled, run:
 
 ```
 ./rebeat -c rebeat.yml -e -d "*"
-```
-
-
-### Test
-
-To test Rebeat, run the following command:
-
-```
-make testsuite
-```
-
-alternatively:
-```
-make unit-tests
-make system-tests
-make integration-tests
-make coverage-report
-```
-
-The test coverage is reported in the folder `./build/coverage/`
-
-### Update
-
-Each beat has a template for the mapping in elasticsearch and a documentation for the fields
-which is automatically generated based on `etc/fields.yml`.
-To generate etc/rebeat.template.json and etc/rebeat.asciidoc
-
-```
-make update
-```
-
-
-### Cleanup
-
-To clean  Rebeat source code, run the following commands:
-
-```
-make fmt
-make simplify
-```
-
-To clean up the build directory and generated artifacts, run:
-
-```
-make clean
 ```
 
 
