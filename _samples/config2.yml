@@ -1,9 +1,0 @@
-rebeat:
-  port: 6000
-  max_message_size: 2048
-  default_es_log_type: rebeat
-  merge_fields_to_root: true
-  enable_json_validation: true
-  json_schema: 
-    email_contact: "/etc/rebeat/app1_schema.json"
-    stock_item: "/etc/rebeat/app2_schema.json"

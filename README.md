@@ -13,19 +13,7 @@ Ensure that this folder is at the following location:
 
 - `rebeat.address` : The address on which the process will listen (Default: 127.0.0.1)
 - `rebeat.port` : The port on which the process will listen (Default = 5044)
-- `rebeat.max_message_size` : The maximum accepted message size (Default = 8192)
-- `rebeat.json_mode`: Enable logging of only JSON formatted messages (Default = true)
 - `rebeat.default_es_log_type`: Elasticsearch type to assign to an event if one isn't specified (Default: rebeat)
-- `rebeat.enable_json_validation` : Boolean value indicating if JSON schema validation should be applied for `json` format messages (Default = false)
-- `rebeat.validate_all_json_types` : When json_mode enabled, indicates if ALL types must have a schema specified. Log entries with types that have no schema will not be published. (Default = false)
-- `rebeat.json_schema` :  A hash consisting of the Elasticsearch type as the key, and the absolute local schema file path as the value.
-
-### Configuration Example
-
-The following are examples of configuration blocks for the `rebeat` section.  
-
-1. [Configuration](_sample/config1.yml) TBD
-2. [Configuration](_sample/config2.yml) TBD
 
 
 #### Considerations

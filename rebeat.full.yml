@@ -7,33 +7,11 @@ rebeat:
   address: "127.0.0.1"
   
   # Port on which the process will listen
-  #port: 5000
+  #port: 5044
   
-  # Protocol on which to listen
-  #protocol: udp
-  
-  # Maxium message size in bytes
-  #max_msg_size: 4096
-  
-  # Enable accepting on JSON formated messages
-  #json_mode: true
-  
-  # Default elasticsearch type to use if no type is present in the message
-  #default_es_log_type: rebeat
-  
-  # Wether to place the parsed json data at the root level or nested in a 'log' object
-  #merge_fields_to_root: true
-  
-  # Enable json validation with schemas
-  #enable_json_validation: false
-  
-  # Enforce json validation for ALL types being logged
-  #validate_all_json_types: false
-  
-  # List of elasticsarch types and their json schema
-  #json_schema:
-  #  email_contact: "/path/to/schema1.json"
-  #  stock_item: "/path/to/schema2.json"
+  # Enable tls options
+  #ssl.enable: false
+  #ssl.certificate: "/etc/pki/client/cert.pem"
   
   # Enable additional debugging messages
   #debug: true

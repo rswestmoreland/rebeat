@@ -4,6 +4,8 @@ import (
 	"github.com/elastic/beats/libbeat/common"
 	"github.com/elastic/beats/libbeat/logp"
 
+	"github.com/rswestmoreland/rebeat/config"
+
 	"bytes"
 	"compress/zlib"
 	"encoding/binary"
@@ -27,6 +29,7 @@ const (
 
 type Parser struct {
         Conn               net.Conn
+	config             config.Config
         readBuffer         io.Reader
         logEntriesReceived chan common.MapStr
 	zlibBuffer         bytes.Buffer
@@ -196,37 +199,33 @@ func (p *Parser) ReadPayload(wlen, plen uint32) (uint32, error) {
 }
 
 // Parse initialises the read loop and begins parsing the incoming request
-func (p *Parser) Parse() {
+func (p *Parser) Parse(timeout uint32) {
 	f := make([]byte, 2)
 	w := []byte(windowsize)
 	c := []byte(compressed)
 	z := make([]byte, 2) // empty slice is 0x0000
 	var err error
-
-	keepalive := 60 * time.Second
-	p.Conn.(*net.TCPConn).SetKeepAlive(true)
-	p.Conn.(*net.TCPConn).SetKeepAlivePeriod(keepalive)
-
-	timeoutDuration := 300 * time.Second
-
-	remoteHost := p.Conn.RemoteAddr().String()
+	remoteHost := p.Conn.RemoteAddr().String() 
 
 	//logp.Info("Starting Parse loop")
 
 Read:
 	for {
-		p.Conn.SetReadDeadline(time.Now().Add(timeoutDuration))
+		// Set idle timeout, zero disables timeout, otherwise wait n seconds
+		if timeout > 0 {
+			p.Conn.SetDeadline(time.Now().Add(time.Duration(timeout) * time.Second))
+		}
 
-		// window length "2W"
+		// Expecting window length "2W"
 		err = binary.Read(p.Conn, binary.BigEndian, &f)
 		if err != nil {
 			e, ok := err.(net.Error)
 			if ok && e.Timeout() {
-				logp.Err("[%s] Timeout reading from socket: %v", remoteHost, err)
-			}
-			if err != io.EOF {
+				logp.Warn("[%s] Timeout reading from socket", remoteHost)
+			} else if err != io.EOF {
 				logp.Err("[%s] Error reading %v", remoteHost, err)
 			}
+			break Read
 		}
 		//logp.Info("[%s] Got data starting with 2W, wlen %d", remoteHost, wlen)
 
@@ -244,7 +243,7 @@ Read:
 		binary.Read(p.Conn, binary.BigEndian, &wlen)
 		//logp.Info("[%s] Got data starting with 2W, wlen %d", remoteHost, wlen)
 
-		// frame length "2C"
+		// Expecting frame length "2C"
 		binary.Read(p.Conn, binary.BigEndian, &f)
 
 		if !bytes.Equal(f, c) {

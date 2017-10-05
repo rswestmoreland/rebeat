@@ -5,8 +5,18 @@
 rebeat:
   address: "127.0.0.1"
   port: 5044
-  protocol: lumberjack
 
+  # Timeout for connections in seconds
+  timeout: 90
+
+  # TLS support
+  ssl.enable: true
+
+  # Certificate for server
+  ssl.certificate: "/etc/pki/tls/certs/rebeat.pem"
+
+  # Server certificate key
+  ssl.key: "/etc/pki/tls/certs/rebeat.key"  
 
 #================================ General =====================================
 
