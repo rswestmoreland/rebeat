@@ -12,6 +12,9 @@ import (
 	"github.com/rswestmoreland/rebeat/config"
 )
 
+// This code started off as a clone from Protologbeat: https://github.com/hartfordfive/protologbeat
+// There may still be some unneeded artifacts that should be removed
+
 type LogListener struct {
 	config             config.Config
 	logEntriesReceived chan common.MapStr
@@ -71,16 +74,16 @@ func (ll *LogListener) Start(logEntriesReceived chan common.MapStr, logEntriesEr
                         continue
                 }
 
-		go LumberConn(conn, ll.config.Timeout, ll.logEntriesReceived)
+		go LumberConn(conn, ll.config.Timeout, ll.logEntriesReceived, ll.config.Meta)
 	}
 }
 
 
 // LumberConn handles an incoming connection from a lumberjack client
-func LumberConn(conn net.Conn, timeout uint32, events chan common.MapStr) {
+func LumberConn(conn net.Conn, timeout uint32, events chan common.MapStr, meta bool) {
 	defer conn.Close()
 	logp.Info("[%s] Accepting lumberjack connection", conn.RemoteAddr().String())
-	NewConnection(conn, events).Parse(timeout)
+	NewConnection(conn, events).Parse(timeout, meta)
 	logp.Info("[%s] Closing lumberjack connection", conn.RemoteAddr().String())
 }
 

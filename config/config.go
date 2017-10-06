@@ -7,18 +7,18 @@ type Config struct {
 	Address                string            `config:"address"`
 	Port                   int               `config:"port"`
 	Timeout                uint32            `config:"timeout"`
+	Meta                   bool              `config:"meta"`
 	EnableSSL              bool              `config:"ssl.enable"`
 	SSLCrt                 string            `config:"ssl.certificate"`
 	SSLKey                 string            `config:"ssl.key"`
-	Debug                  bool              `config:"debug"`
 }
 
 var DefaultConfig = Config{
 	Address:                "127.0.0.1",
 	Port:                   5044,
 	Timeout:                0,
+	Meta:			false,
 	EnableSSL:              false,
 	SSLCrt:			"",
 	SSLKey:			"",
-	Debug:                  false,
 }

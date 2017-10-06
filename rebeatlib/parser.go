@@ -4,7 +4,6 @@ import (
 	"github.com/elastic/beats/libbeat/common"
 	"github.com/elastic/beats/libbeat/logp"
 
-	"github.com/rswestmoreland/rebeat/config"
 
 	"bytes"
 	"compress/zlib"
@@ -17,6 +16,9 @@ import (
 	"time"
 )
 
+// This code originally borrowed from Logzoom https://github.com/packetzoom/logzoom
+// It has been refactored quite a bit to fix bugs and integrate into the main project
+
 const (
 	ackframe    = "2A"
 	windowsize  = "2W"
@@ -28,21 +30,14 @@ const (
 )
 
 type Parser struct {
-        Conn               net.Conn
-	config             config.Config
-        readBuffer         io.Reader
-        logEntriesReceived chan common.MapStr
-	zlibBuffer         bytes.Buffer
-	jsonBuffer         bytes.Buffer
-}
-
-// Taken from https://github.com/elasticsearch/logstash-forwarder/blob/master/event.go
-type Event struct {
-	Source string  `json:"source,omitempty"`
-	Offset int64   `json:"offset,omitempty"`
-	Line   uint64  `json:"line,omitempty"`
-	Text   *string `json:"text,omitempty"`
-	Fields *map[string]interface{}
+	receiveTime             common.Time
+	localHost               string
+	remoteHost              string
+	meta                    bool
+	logEntriesReceived      chan common.MapStr
+	readBuffer              io.Reader
+	Conn                    net.Conn
+	zlibBuffer, jsonBuffer  bytes.Buffer
 }
 
 
@@ -110,6 +105,7 @@ func (p *Parser) ReadPayload(wlen, plen uint32) (uint32, error) {
 	var err error
 	j := []byte(jsonpayload)
 	d := []byte(datapayload)
+	p.receiveTime = common.Time(time.Now())
 
 	p.zlibBuffer.Reset()
 	io.CopyN(&p.zlibBuffer, p.Conn, int64(plen))
@@ -140,6 +136,8 @@ func (p *Parser) ReadPayload(wlen, plen uint32) (uint32, error) {
 			continue
 		}
 
+		event := common.MapStr{}
+
 		if bytes.Equal(b, j) {
 		// JSON data payload
 			//logp.Info("Got JSON data")
@@ -153,24 +151,16 @@ func (p *Parser) ReadPayload(wlen, plen uint32) (uint32, error) {
 				return seq, err
 			}
 
-			event := common.MapStr{}
-
 			err = json.Unmarshal(jsonData, &event)
 			if err != nil {
 				logp.Err("Error decoding JSON data on seq %d", seq)
 				return seq, err
 			}
 
-			event["rebeat_ts"] = common.Time(time.Now())
-
-			p.logEntriesReceived <- event
-
 		} else if bytes.Equal(b, d) {
 		// Legacy data payload
 			binary.Read(p.readBuffer, binary.BigEndian, &seq)
 			binary.Read(p.readBuffer, binary.BigEndian, &count)
-
-			event := common.MapStr{}
 
 			for j := uint32(0); j < count; j++ {
 				k, v, err = p.ReadKV()
@@ -186,32 +176,41 @@ func (p *Parser) ReadPayload(wlen, plen uint32) (uint32, error) {
 			t := event["line"].(string)
 			event["text"] = &t
 
-			event["rebeat_ts"] = common.Time(time.Now())
-
-			p.logEntriesReceived <- event
-
 		} else {
 			return seq, fmt.Errorf("unknown type: %s", b)
 		}
+
+		if p.meta {
+			event["rebeat_ts"] = p.receiveTime
+			event["rebeat_server"] = p.localHost
+			event["rebeat_client"] = p.remoteHost
+
+		}
+
+		p.logEntriesReceived <- event
+
 	}
 
 	return seq, nil
 }
 
 // Parse initialises the read loop and begins parsing the incoming request
-func (p *Parser) Parse(timeout uint32) {
+func (p *Parser) Parse(timeout uint32, meta bool) {
 	f := make([]byte, 2)
 	w := []byte(windowsize)
 	c := []byte(compressed)
 	z := make([]byte, 2) // empty slice is 0x0000
+	s := []byte{0x16, 0x03} // ssl handshake
 	var err error
-	remoteHost := p.Conn.RemoteAddr().String() 
+	p.remoteHost = p.Conn.RemoteAddr().String()
+	p.localHost = p.Conn.LocalAddr().String()
+	p.meta = meta
 
 	//logp.Info("Starting Parse loop")
 
 Read:
 	for {
-		// Set idle timeout, zero disables timeout, otherwise wait n seconds
+		// Set idle timeout, zero disables timeout, otherwise wait specified seconds
 		if timeout > 0 {
 			p.Conn.SetDeadline(time.Now().Add(time.Duration(timeout) * time.Second))
 		}
@@ -221,50 +220,51 @@ Read:
 		if err != nil {
 			e, ok := err.(net.Error)
 			if ok && e.Timeout() {
-				logp.Warn("[%s] Timeout reading from socket", remoteHost)
+				logp.Warn("[%s] Timeout reading from socket", p.remoteHost)
 			} else if err != io.EOF {
-				logp.Err("[%s] Error reading %v", remoteHost, err)
+				logp.Err("[%s] Error reading %v", p.remoteHost, err)
 			}
 			break Read
 		}
-		//logp.Info("[%s] Got data starting with 2W, wlen %d", remoteHost, wlen)
 
 		if !bytes.Equal(f, w) {
 			// Got unexpected data
 			if bytes.Equal(f, z) {
-				logp.Info("[%s] Client likely closed connection", remoteHost)
+				logp.Info("[%s] Client likely closed connection", p.remoteHost)
+			} else if bytes.Equal(f, s) {
+				logp.Info("[%s] Client likely configured for TLS", p.remoteHost)
 			} else {
-				logp.Warn("[%s] Received unknown type 0x%x, expected 2W", remoteHost, f)
+				logp.Warn("[%s] Received unknown type 0x%x, expected 2W", p.remoteHost, f)
 			}
 			break Read
 		}
 
 		var wlen uint32
 		binary.Read(p.Conn, binary.BigEndian, &wlen)
-		//logp.Info("[%s] Got data starting with 2W, wlen %d", remoteHost, wlen)
+		//logp.Info("[%s] Got data starting with 2W, wlen %d", p.remoteHost, wlen)
 
 		// Expecting frame length "2C"
 		binary.Read(p.Conn, binary.BigEndian, &f)
 
 		if !bytes.Equal(f, c) {
 			// Got unexpected data
-			logp.Warn("[%s] Received unknown type 0x%x, expected 2C", remoteHost, f)
+			logp.Warn("[%s] Received unknown type 0x%x, expected 2C", p.remoteHost, f)
 			break Read
 		}
 
 		var plen uint32
 		binary.Read(p.Conn, binary.BigEndian, &plen)
-		//logp.Info("[%s] Got data starting with 2C, plen %d", remoteHost, plen)
+		//logp.Info("[%s] Got data starting with 2C, plen %d", p.remoteHost, plen)
 		seq, err := p.ReadPayload(wlen, plen)
 
 		if err != nil {
-			logp.Err("[%s] Error parsing %v", remoteHost, err)
+			logp.Err("[%s] Error parsing %v", p.remoteHost, err)
 			break Read
 		}
 
 		err = p.SendAck(seq)
 		if err != nil {
-			logp.Err("[%s] Error acking %v", remoteHost, err)
+			logp.Err("[%s] Error acking %v", p.remoteHost, err)
 			break Read
 		}
 

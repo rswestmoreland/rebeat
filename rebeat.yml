@@ -3,20 +3,25 @@
 ############################# Rebeat ######################################
 
 rebeat:
+
+  # Listening address and port
   address: "127.0.0.1"
   port: 5044
 
   # Timeout for connections in seconds
-  timeout: 90
+  timeout: 300
 
-  # TLS support
-  ssl.enable: true
+  # Boolean to add rebeat meta data to events before output
+  #meta: true
+
+  # Boolean for TLS support
+  #ssl.enable: true
 
   # Certificate for server
-  ssl.certificate: "/etc/pki/tls/certs/rebeat.pem"
+  #ssl.certificate: "/etc/pki/tls/certs/rebeat.pem"
 
   # Server certificate key
-  ssl.key: "/etc/pki/tls/certs/rebeat.key"  
+  #ssl.key: "/etc/pki/tls/certs/rebeat.key"  
 
 #================================ General =====================================
 
@@ -79,12 +84,12 @@ output.file:
   # Maximum size in kilobytes of each file. When this size is reached, and on
   # every rebeat restart, the files are rotated. The default value is 10240
   # kB.
-  rotate_every_kb: 100000
+  rotate_every_kb: 25000
 
   # Maximum number of files under path. When this number of files is reached,
   # the oldest file is deleted and the rest are shifted from last to first. The
   # default is 7 files.
-  number_of_files: 50
+  number_of_files: 10
 
 #================================ Logging =====================================
 

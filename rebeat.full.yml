@@ -3,18 +3,25 @@
 ############################# Rebeat ######################################
 
 rebeat:
-  # Address on which the process will listen
+
+  # Listening address and port
   address: "127.0.0.1"
-  
-  # Port on which the process will listen
-  #port: 5044
-  
-  # Enable tls options
-  #ssl.enable: false
-  #ssl.certificate: "/etc/pki/client/cert.pem"
-  
-  # Enable additional debugging messages
-  #debug: true
+  port: 5044
+
+  # Timeout for connections in seconds
+  #timeout: 300
+
+  # Boolean to add rebeat meta data to events before output
+  #meta: true
+
+  # Boolean for TLS support
+  #ssl.enable: true
+
+  # Certificate for server
+  #ssl.certificate: "/etc/pki/tls/certs/rebeat.pem"
+
+  # Server certificate key
+  #ssl.key: "/etc/pki/tls/certs/rebeat.key"
 
 #================================ General ======================================
 
