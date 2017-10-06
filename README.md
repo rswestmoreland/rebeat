@@ -94,4 +94,8 @@ git clone https://github.com/rswestmoreland/rebeat
 
 For further development, check out the [beat developer guide](https://www.elastic.co/guide/en/beats/libbeat/current/new-beat.html).
 
+### Releases
+
+https://github.com/rswestmoreland/rebeat/releases/tag/0.1.0beta1
+
 
