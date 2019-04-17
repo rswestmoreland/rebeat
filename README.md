@@ -21,9 +21,9 @@ Ensure that this folder is at the following location:
 
 #### Considerations
 
-Rebeat currently runs one listener configured for either tcp or tcp/tls, thefore all clients connecting to the rebeat server must use a consistent transport method.  To support both tcp and tcp/tls simultaneously you can run a 2nd rebeat on an alternative port.
+Rebeat currently runs one listener configured for either tcp or tcp/tls, therefore all clients connecting to the rebeat server must use a consistent transport method.  To support both tcp and tcp/tls simultaneously you can run a 2nd rebeat on an alternative port.
 
-Deploying multiple rebeat servers can result in various advantageous toplogies, for example:
+Deploying multiple rebeat servers can result in various advantageous topologies, for example:
 
 - Fanout Load Balancing (Client beat [IP Load Balancing] -> 2x Tier1 Rebeats -> 8x Tier2 Rebeats -> Graylog2 Cluster [Beat Input])
 - Consolidator (Client beat [DNS Load Balancing] -> 8x Tier1 Rebeats -> 2x Tier2 Rebeats -> Elasticsearch Cluster)
